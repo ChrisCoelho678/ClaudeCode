@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    color: #eee;
+  }
+  #hud {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+  #hud span { color: #a0e0a0; font-weight: bold; }
+  canvas {
+    border: 3px solid #4a9e4a;
+    background: #0d1117;
+    display: block;
+  }
+  #message {
+    margin-top: 14px;
+    font-size: 16px;
+    color: #888;
+    height: 20px;
+  }
+</style>
+</head>
+<body>
+<div id="hud">Score: <span id="score">0</span> &nbsp; Best: <span id="best">0</span></div>
+<canvas id="c"></canvas>
+<div id="message">Press any WASD key to start</div>
+
+<script>
+const COLS = 25;
+const ROWS = 25;
+const CELL = 24;
+const WALL = 1; // wall thickness in cells
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width  = COLS * CELL;
+canvas.height = ROWS * CELL;
+
+const scoreEl  = document.getElementById('score');
+const bestEl   = document.getElementById('best');
+const messageEl = document.getElementById('message');
+
+let snake, dir, nextDir, fruit, score, best, state, frameCount, speed;
+
+best = parseInt(localStorage.getItem('snake_hi') || '0');
+bestEl.textContent = best;
+
+function initGame() {
+  const midX = Math.floor(COLS / 2);
+  const midY = Math.floor(ROWS / 2);
+  snake = [
+    { x: midX,     y: midY },
+    { x: midX - 1, y: midY },
+    { x: midX - 2, y: midY },
+  ];
+  dir      = { x: 1, y: 0 };
+  nextDir  = { x: 1, y: 0 };
+  score    = 0;
+  speed    = 8; // frames per move
+  frameCount = 0;
+  scoreEl.textContent = 0;
+  placeFruit();
+}
+
+function placeFruit() {
+  const occupied = new Set(snake.map(s => s.x + ',' + s.y));
+  let fx, fy;
+  do {
+    fx = WALL + Math.floor(Math.random() * (COLS - WALL * 2));
+    fy = WALL + Math.floor(Math.random() * (ROWS - WALL * 2));
+  } while (occupied.has(fx + ',' + fy));
+  fruit = { x: fx, y: fy };
+}
+
+function step() {
+  dir = nextDir;
+
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  // Wall collision
+  if (head.x < WALL || head.x >= COLS - WALL || head.y < WALL || head.y >= ROWS - WALL) {
+    die();
+    return;
+  }
+
+  // Self collision
+  for (const seg of snake) {
+    if (seg.x === head.x && seg.y === head.y) {
+      die();
+      return;
+    }
+  }
+
+  snake.unshift(head);
+
+  if (head.x === fruit.x && head.y === fruit.y) {
+    score++;
+    scoreEl.textContent = score;
+    if (score > best) {
+      best = score;
+      bestEl.textContent = best;
+      localStorage.setItem('snake_hi', best);
+    }
+    // Speed up slightly every 5 fruits, min 3 frames
+    if (score % 5 === 0 && speed > 3) speed--;
+    placeFruit();
+  } else {
+    snake.pop();
+  }
+}
+
+function die() {
+  state = 'dead';
+  messageEl.textContent = 'Game over! Press any WASD key to restart';
+}
+
+// Input
+document.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  const map = { w: {x:0,y:-1}, a: {x:-1,y:0}, s: {x:0,y:1}, d: {x:1,y:0} };
+  if (!map[key]) return;
+  e.preventDefault();
+
+  const d = map[key];
+  // Prevent reversing
+  if (d.x === -dir.x && d.y === -dir.y) return;
+  nextDir = d;
+
+  if (state === 'idle' || state === 'dead') {
+    initGame();
+    nextDir = d;
+    dir     = d;
+    state   = 'playing';
+    messageEl.textContent = '';
+  }
+});
+
+// Drawing
+function drawCell(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw wall border
+  ctx.fillStyle = '#2a5c2a';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Inner play area
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(WALL * CELL, WALL * CELL, (COLS - WALL * 2) * CELL, (ROWS - WALL * 2) * CELL);
+
+  // Fruit
+  ctx.fillStyle = '#e05050';
+  ctx.beginPath();
+  ctx.arc(
+    fruit.x * CELL + CELL / 2,
+    fruit.y * CELL + CELL / 2,
+    CELL / 2 - 3, 0, Math.PI * 2
+  );
+  ctx.fill();
+
+  // Snake body
+  for (let i = snake.length - 1; i >= 0; i--) {
+    const t = i / snake.length;
+    const green = Math.round(160 + (1 - t) * 80);
+    drawCell(snake[i].x, snake[i].y, `rgb(0,${green},0)`);
+  }
+
+  // Snake head highlight
+  const h = snake[0];
+  ctx.fillStyle = '#afffaf';
+  ctx.fillRect(h.x * CELL + CELL / 2 - 3, h.y * CELL + CELL / 2 - 3, 6, 6);
+
+  // Dead overlay
+  if (state === 'dead') {
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ff6060';
+    ctx.font = 'bold 36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+  }
+}
+
+// Game loop
+function loop() {
+  requestAnimationFrame(loop);
+  if (state === 'playing') {
+    frameCount++;
+    if (frameCount % speed === 0) step();
+  }
+  if (fruit) draw();
+}
+
+// Init
+state = 'idle';
+initGame();
+loop();
+</script>
+</body>
+</html>
