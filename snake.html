@@ -71,7 +71,7 @@ function initGame() {
   dir      = { x: 1, y: 0 };
   nextDir  = { x: 1, y: 0 };
   score    = 0;
-  speed    = 8; // frames per move
+  speed    = 20; // frames per move
   frameCount = 0;
   scoreEl.textContent = 0;
   placeFruit();
@@ -116,8 +116,6 @@ function step() {
       bestEl.textContent = best;
       localStorage.setItem('snake_hi', best);
     }
-    // Speed up slightly every 5 fruits, min 3 frames
-    if (score % 5 === 0 && speed > 3) speed--;
     placeFruit();
   } else {
     snake.pop();
